@@ -49,10 +49,21 @@ def annotate_detection(image_array: np.ndarray, detection: Detection) -> np.ndar
 
 
 def annotate_segmentation(image_array: np.ndarray, segmentation: Segmentation, draw_boxes: bool = True) -> np.ndarray:
-    ### ========================== ###
-    ### SU IMPLEMENTACION AQUI     ###
-    ### ========================== ###
-    return image_array
+    image = image_array.copy()
+    for seg_mask, category, bbox in zip(segmentation.masks, segmentation.categories, segmentation.bboxes):
+        if category == 'danger':
+            color = np.array([0, 0, 255], dtype=np.uint8)
+        elif category == 'safe':
+            color = np.array([0, 255, 0], dtype=np.uint8)
+        else:
+            continue 
+        mask = seg_mask.astype(bool)
+        image[mask] = cv2.addWeighted(image, 0.5, color, 0.5, 0)[mask]
+        if draw_boxes:
+            x1, y1, x2, y2 = bbox
+            cv2.rectangle(image, (x1, y1), (x2, y2), color.tolist(), 3)
+            cv2.putText(image, category, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 2, color.tolist(), 2)
+    return image
 
 
 class GunDetector:
