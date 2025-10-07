@@ -36,6 +36,22 @@ def detect_uploadfile(detector: GunDetector, file, threshold) -> tuple[Detection
     img_array = np.array(img_obj)
     return detector.detect_guns(img_array, threshold), img_array
 
+def segment_uploadfile(detector: GunDetector, file, threshold, max_distance) -> tuple[Segmentation, np.ndarray]:
+    img_stream = io.BytesIO(file.file.read())
+    if file.content_type.split("/")[0] != "image":
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Not an image"
+        )
+    # convertir a una imagen de Pillow
+    try:
+        img_obj = Image.open(img_stream)
+    except UnidentifiedImageError:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Image format not suported"
+        )
+    # crear array de numpy
+    img_array = np.array(img_obj)
+    return detector.segment_people(img_array, threshold, max_distance), img_array
 
 @app.get("/model_info")
 def get_model_info(detector: GunDetector = Depends(get_gun_detector)):
@@ -73,7 +89,47 @@ def annotate_guns(
     image_stream.seek(0)
     return Response(content=image_stream.read(), media_type="image/jpeg")
 
+@app.post("/segment_people_annotated")
+def segment_people_annotated(
+    file: UploadFile = File(...),
+    threshold: float = 0.5,
+    detector: GunDetector = Depends(get_gun_detector),
+) -> Response:
+    try:
+        img_stream = io.BytesIO(file.file.read())
+        if file.content_type.split("/")[0] != "image":
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, 
+                detail="Not an image"
+            )
 
+        try:
+            img_obj = Image.open(img_stream)
+        except UnidentifiedImageError:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, 
+                detail="Image format not supported"
+            )
+        
+        img_array = np.array(img_obj)
+
+        segmentation = detector.segment_people(img_array, threshold)
+        annotated_img = annotate_segmentation(img_array, segmentation, draw_boxes=True)
+
+        if len(annotated_img.shape) == 3 and annotated_img.shape[2] == 3:
+            annotated_img_bgr = cv2.cvtColor(annotated_img, cv2.COLOR_RGB2BGR)
+        else:
+            annotated_img_bgr = annotated_img
+            
+        success, encoded_img = cv2.imencode('.jpg', annotated_img_bgr)
+        if not success:
+            raise HTTPException(status_code=500, detail="Error encoding image")
+        
+        return Response(content=encoded_img.tobytes(), media_type="image/jpeg")
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+    
 if __name__ == "__main__":
     import uvicorn
 
