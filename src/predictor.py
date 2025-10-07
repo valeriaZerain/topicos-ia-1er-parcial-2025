@@ -9,7 +9,7 @@ from src.config import get_settings
 SETTINGS = get_settings()
 
 
-def match_gun_bbox(segment: list[list[int]], bboxes: list[list[int]], max_distance: int = 10) -> list[int] | None:
+def match_gun_bbox(segment: list[list[int]], bboxes: list[list[int]], max_distance: int) -> list[int] | None:
     matched_box = None
     min_distance = float('inf')
     
@@ -108,7 +108,7 @@ class GunDetector:
             confidences=confidences,
         )
     
-    def segment_people(self, image_array: np.ndarray, threshold: float = 0.5, max_distance: int = 10):
+    def segment_people(self, image_array: np.ndarray, threshold: float = 0.5, max_distance: int=10):
         gun_detection = self.detect_guns(image_array, threshold)
         gun_boxes = gun_detection.boxes
         
