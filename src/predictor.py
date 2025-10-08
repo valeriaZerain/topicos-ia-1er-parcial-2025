@@ -14,11 +14,11 @@ def match_gun_bbox(segment: list[list[int]], bboxes: list[list[int]], max_distan
     min_distance = float('inf')
     
     polygon = Polygon(segment)
-    centroid = polygon.centroid
-    mid_x, mid_y = centroid.x, centroid.y
+    person_bbox = box(*polygon.bounds)  
 
     for bbox in bboxes:
-        dist = distance_point_to_bbox(mid_x, mid_y, bbox)
+        gun_bbox = box(*bbox)
+        dist = person_bbox.distance(gun_bbox)  
         if dist < min_distance and dist <= max_distance:
             min_distance = dist
             matched_box = bbox
