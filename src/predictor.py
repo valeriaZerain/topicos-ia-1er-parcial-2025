@@ -57,13 +57,13 @@ def annotate_segmentation(image_array: np.ndarray, segmentation: Segmentation, d
     
     for bbox, label in zip(segmentation.boxes, segmentation.labels):
         if label == 'danger':
-            color = (255, 0, 0) 
+            color = (255, 0, 0)  # rojo
         else: 
-            color = (0, 255, 0) 
+            color = (0, 255, 0)  # verde
         
         x1, y1, x2, y2 = bbox
-        cv2.rectangle(image, (x1, y1), (x2, y2), color, 3)
-        
+        if draw_boxes:
+            cv2.rectangle(image, (x1, y1), (x2, y2), color, 3)
         cv2.putText(
             image, 
             f"{label.upper()}", 
@@ -75,6 +75,7 @@ def annotate_segmentation(image_array: np.ndarray, segmentation: Segmentation, d
         )
     
     return image
+
 
 class GunDetector:
     def __init__(self) -> None:

@@ -104,7 +104,36 @@ def segment_people_annotated(
     img_pil.save(image_stream, format="JPEG")
     image_stream.seek(0)
     return Response(content=image_stream.read(), media_type="image/jpeg")
-    
+
+@app.post("/detect_people")
+def detect_people(
+    threshold: float = 0.5,
+    max_distance: int = 100,
+    file: UploadFile = File(...),
+    detector: GunDetector = Depends(get_gun_detector),
+) -> Segmentation:
+    segmentation, _ = segment_uploadfile(detector, file, threshold, max_distance)
+
+    return segmentation
+
+@app.post("/annotate_people")
+def annotate_people(
+    threshold: float = 0.5,
+    max_distance: int = 100,
+    draw_boxes: bool = True,
+    file: UploadFile = File(...),
+    detector: GunDetector = Depends(get_gun_detector),
+) -> Response:
+    segmentation, img = segment_uploadfile(detector, file, threshold, max_distance)
+    annotated_img = annotate_segmentation(img, segmentation, draw_boxes=draw_boxes)
+    img_pil = Image.fromarray(annotated_img)
+    image_stream = io.BytesIO()
+    img_pil.save(image_stream, format="JPEG")
+    image_stream.seek(0)
+
+    return Response(content=image_stream.read(), media_type="image/jpeg")
+
+
 if __name__ == "__main__":
     import uvicorn
 
