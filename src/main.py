@@ -133,6 +133,21 @@ def annotate_people(
 
     return Response(content=image_stream.read(), media_type="image/jpeg")
 
+@app.post("/detect")
+def detect(
+    threshold: float = 0.5,
+    max_distance: int = 100,
+    file: UploadFile = File(...),
+    detector: GunDetector = Depends(get_gun_detector),
+):
+    detection, _ = detect_uploadfile(detector, file, threshold)
+    file.file.seek(0)
+    segmentation, _ = segment_uploadfile(detector, file, threshold, max_distance)
+
+    return {
+        "detection": detection,
+        "segmentation": segmentation
+    }
 
 if __name__ == "__main__":
     import uvicorn
