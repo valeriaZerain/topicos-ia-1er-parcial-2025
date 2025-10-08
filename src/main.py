@@ -7,6 +7,7 @@ from functools import cache
 from PIL import Image, UnidentifiedImageError
 from src.predictor import GunDetector, Detection, Segmentation, annotate_detection, annotate_segmentation
 from src.config import get_settings
+from src.models import Gun
 
 SETTINGS = get_settings()
 
@@ -104,6 +105,106 @@ def segment_people_annotated(
     img_pil.save(image_stream, format="JPEG")
     image_stream.seek(0)
     return Response(content=image_stream.read(), media_type="image/jpeg")
+    
+    
+@app.post("/annotate")
+def annotate_all(
+    threshold: float = 0.5,
+    max_distance: int = 100,
+    file: UploadFile = File(...),
+    detector: GunDetector = Depends(get_gun_detector),
+) -> Response:
+    file_bytes = file.file.read()
+    file.file.seek(0)
+
+    img_stream = io.BytesIO(file_bytes)
+    img_obj = Image.open(img_stream)
+    img_array = np.array(img_obj)
+
+    detection = detector.detect_guns(img_array, threshold)
+    segmentation = detector.segment_people(img_array, threshold, max_distance)
+
+    annotated_img = annotate_detection(img_array, detection)
+    annotated_img = annotate_segmentation(annotated_img, segmentation)
+
+    img_pil = Image.fromarray(annotated_img)
+    image_stream = io.BytesIO()
+    img_pil.save(image_stream, format="JPEG")
+    image_stream.seek(0)
+    return Response(content=image_stream.read(), media_type="image/jpeg")
+
+@app.post("/guns")
+def get_guns(
+    threshold: float = 0.5,
+    file: UploadFile = File(...),
+    detector: GunDetector = Depends(get_gun_detector),
+):
+    detection, _ = detect_uploadfile(detector, file, threshold)
+
+    guns = []
+    for i, (label, box) in enumerate(zip(detection.labels, detection.boxes)):
+        conf = float(detection.confidences[i]) if i < len(detection.confidences) else None
+        x1, y1, x2, y2 = box
+        cx = int((x1 + x2) / 2)
+        cy = int((y1 + y2) / 2)
+
+        try:
+            guns.append(Gun(
+                gun_type=label,
+                position={"x": cx, "y": cy},
+                bbox=box,
+                confidence=conf
+            ))
+        except Exception:
+            guns.append({
+                "gun_type": label,
+                "position": {"x": cx, "y": cy},
+                "bbox": box,
+                "confidence": conf
+            })
+
+    return guns
+
+@app.post("/people")
+def get_people(
+    threshold: float = 0.5,
+    max_distance: int = 100,
+    file: UploadFile = File(...),
+    detector: GunDetector = Depends(get_gun_detector),
+):
+    from src.models import Person
+
+    segmentation, _ = segment_uploadfile(detector, file, threshold, max_distance)
+
+    people = []
+    for polygon, label in zip(segmentation.polygons, segmentation.labels):
+        poly = np.array(polygon, dtype=np.int32)
+
+        M = cv2.moments(poly)
+        if M["m00"] != 0:
+            cx = int(M["m10"] / M["m00"])
+            cy = int(M["m01"] / M["m00"])
+        else:
+            cx, cy = int(np.mean(poly[:, 0])), int(np.mean(poly[:, 1]))
+
+        area = float(cv2.contourArea(poly))
+
+        try:
+            people.append(
+                Person(
+                    category=label,
+                    position={"x": cx, "y": cy},
+                    area=area
+                )
+            )
+        except Exception:
+            people.append({
+                "category": label,
+                "position": {"x": cx, "y": cy},
+                "area": area
+            })
+
+    return people   
     
 if __name__ == "__main__":
     import uvicorn
